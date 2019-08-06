@@ -1,0 +1,486 @@
+---
+title: "오픈채팅방 데이터 탐색"
+auther: "최의용"
+
+output:
+  html_document:
+    fig_width: 10
+    fig_height: 6
+    highlight: textmate
+    theme: cosmo
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    fig_height: 6
+    fig_width: 10
+    toc: no
+  word_document:
+    fig_height: 6
+    fig_width: 9
+    toc: no    
+---
+
+<br><br>
+데이터 분석 분야의 오픈채팅방이 얼마나 활발하게 진행 되고 있는지 파악해보자. 중점은 비정형 데이터인 카카오톡 데이터를 정형화 시키느것, 반응형 그래프와 테이블을 만들었다는것, 그리고 도메인 지식이 없으면 이에 대한 해석이 힘들 거라느 점이다.
+이곳에서 코드 설명은 따로 하지 않을 예정이고, 코드 설명에 대한 내용은 블로그에다가 나누어서 설명을 해보려고 한다.
+
+### **문의** <br>
+이름: 최의용 <br>
+Email : shjj08@gmail.com <br>
+블로그 주소: [오픈채팅방 분석 - 비정형 데이터의 정형화](https://medium.com/@unfinishedgod/%EC%98%A4%ED%94%88%EC%B1%84%ED%8C%85%EB%B0%A9-%EB%B6%84%EC%84%9D-1-%EB%B9%84%EC%A0%95%ED%98%95-%EB%8D%B0%EC%9D%B4%ED%84%B0%EC%9D%98-%EC%A0%95%ED%98%95%ED%99%94-c6dc537d4846) <br>
+깃허브 주소: [https://github.com/Unfinishedgod](https://github.com/Unfinishedgod)  <br>
+페이스북 주소: [https://www.facebook.com/shjj08](https://www.facebook.com/shjj08) <br>
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r results='hide', message=FALSE, warning=FALSE, echo=FALSE,include = FALSE}
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(ggplot2)
+library(rmarkdown)
+
+library(DT)
+library(kableExtra)
+library(extrafont)
+library(plotly)
+
+# 워드 클라우드 Library
+library(wordcloud)
+library(RColorBrewer)
+library(KoNLP)
+```
+
+![](https://www.notion.so/image/https%3A%2F%2Fs3-us-west-2.amazonaws.com%2Fsecure.notion-static.com%2F61f5a231-5059-43cc-a561-2761931a9e98%2FUntitled.png?table=block&id=33a09a7a-5f24-4ca8-b47c-fd32f62b3a74&width=1440&cache=v2)
+
+## **데이터분석 QnA&네트워킹** <br><br>
+데이터 관계자들이 만드는 정보공유 소통 커뮤니티, 데분방(DATAROOM)입니다. 라는 슬로건의 데이터분석 커뮤니티이다. <br>
+현재 약 1237명(2019-08-06기준) 정도가 오픈채팅방에 소속되어 있으며, 특히 R, 파이썬 관련한 질문 답변이 활발하다. <br>
+그럼 이제 이 곳의 7월 오픈채팅방의 생태계를 조사해보자. <br>
+
+공식 링크: [www.dataroom.kr](http://www.dataroom.kr) <br>
+카톡 링크: https://open.kakao.com/o/gcaPzHr <br>
+
+```{r echo=FALSE}
+# args=(commandArgs(TRUE))
+# txt_name <- args
+txt_name <- "data_0803_talk"
+
+
+dir <- paste0(getwd(),"/Textfile/")
+
+
+text_file <- paste0(txt_name,".txt")
+
+text_value <- paste0(dir,text_file)
+
+kko <- readLines(text_value)
+
+raw_df <- kko
+
+## Test용
+
+# 월, 일, 오전, 오후 기준 설정
+# 21, 22번째 글자 까지 하드 코딩
+index_date <- grepl(",",str_sub(raw_df,21,22)) & 
+  grepl("월",raw_df) & 
+  grepl("일",raw_df) &
+  (grepl("오전",raw_df) |
+     grepl("오후",raw_df))
+
+# raw 재 설정
+raw_df_2 <- raw_df[index_date]
+
+# 첫번째 comma 찾기
+comma_pattern <- regexpr(",",raw_df_2)
+
+# comma 별 글자 선택
+kko_date <- str_sub(raw_df_2,1,comma_pattern-1)
+
+# 문자열 최대 길이 
+nchar_max <- max(nchar(raw_df_2))
+
+# 각 comma 기준 뒤에 나오는 text 선정 
+kko_text <- str_sub(raw_df_2,comma_pattern + 2,nchar_max)
+
+## Username이 나오는 경우
+# colon 나오는 텍스트만 추출
+text_colon_index <- grep(":",kko_text)
+
+kko_text_colon <- kko_text[text_colon_index]
+
+# colon
+colon_grep <- regexpr(":",kko_text_colon)
+
+# Username, text 별 DF 생성
+text_only_df <- cbind(
+  text_colon_index,
+  str_sub(kko_text_colon,1,colon_grep-2),
+  str_sub(kko_text_colon,colon_grep + 2,nchar_max)
+) 
+
+## Username이 나오지 않는 경우
+# colon이 나오지 않는 텍스트 선정
+text_notcolon_index <- which(!grepl(":",kko_text))
+
+
+# colon나오지 않는 패턴
+text_pattern <- c("님이 들어왔습니다.",
+                  "님이 나갔습니다.",
+                  "채팅방 관리자가 메시지를 가렸습니다.",
+                  "님을 내보냈습니다.",
+                  "삭제된 메시지입니다.",
+                  "변경되었습니다.")
+
+# 각 패턴별 df 생성
+pattern_df <- c()
+# pattern_msg <- text_pattern[1]
+for(pattern_msg in text_pattern) {
+  pattern_index <- grep(pattern_msg,kko_text)
+  # pattern_index <- which(pattern_msg == kko_text)
+  pattern_index <- intersect(text_notcolon_index,pattern_index)
+  
+  pattern_grep <- regexpr(pattern_msg,kko_text[pattern_index])
+  
+  pattern_raw_df <- cbind(
+    pattern_index,
+    str_sub(kko_text[pattern_index],1,pattern_grep-1),
+    str_sub(kko_text[pattern_index],pattern_grep,nchar_max)
+  )
+  pattern_df <- rbind(pattern_df,pattern_raw_df)
+}
+
+# username이 있는 경우 없는 경우 합치기
+total_df <- as.data.frame(
+  rbind(
+    text_only_df,
+    pattern_df 
+  )
+)
+
+
+total_df[,1] <- as.numeric(as.character(total_df[,1]))
+total_df[,2:3] <- sapply(total_df[,2:3], as.character)
+# total_df[,3] <- as.character(total_df[,3])
+
+total_df <- total_df %>% arrange(text_colon_index)
+
+total_df <- cbind(kko_date,total_df[,2:3])
+
+# 날짜형 변환
+total_df[,1] <- gsub(",","",total_df[,1])
+total_df[,1] <- gsub("년 ","-",total_df[,1])
+total_df[,1] <- gsub("월 ","-",total_df[,1])
+total_df[,1] <- gsub("일 "," ",total_df[,1])
+total_df[,1] <- gsub("오전 ","",total_df[,1])
+
+pm_index <- grep("오후",total_df[,1])
+total_df[,1] <- gsub("오후 ","",total_df[,1])
+
+
+
+total_df[,1] <- as.POSIXct(total_df[,1])
+
+total_df[pm_index,1] <- total_df[pm_index,1] + 60*60*12
+# hour(total_df[pm_index,1]) <- hour(total_df[pm_index,1]) + 12
+
+rownames(total_df) <- NULL
+colnames(total_df) <- c("Date","User","Message")
+total_df$User[grep("회원님",total_df$User)] <- "의용"
+
+
+head_null_index <- grep(" ",str_sub(total_df$User,1,1))
+
+total_df$User[head_null_index] <- gsub(" ","",total_df$User[head_null_index])
+
+# User로 변경
+total_df$User <- factor(total_df$User)
+levels(total_df$User) <- paste0("User",c(1:length(levels(total_df$User))))
+```
+
+
+```{r echo=FALSE}
+# 카톡 공식 메시지 제거 하고 하기.
+
+text_pattern <- c("님이 들어왔습니다.",
+                  "님이 나갔습니다.",
+                  "채팅방 관리자가 메시지를 가렸습니다.",
+                  "님을 내보냈습니다.",
+                  "삭제된 메시지입니다.",
+                  "변경되었습니다.")
+
+pattern_test <- FALSE
+for(pattern in text_pattern) {
+  pattern_test <- pattern_test | grepl(pattern, total_df$Message)
+}
+
+
+talk_ratio_df <- total_df[!pattern_test,]
+
+
+month_set <- 7
+# useSejongDic()
+month_range <- paste0("2019-0",month_set,"-01")
+month_range_next <- paste0("2019-0",month_set+1,"-01")
+
+month_setting <- talk_ratio_df$Date >= month_range &
+  talk_ratio_df$Date < month_range_next
+
+talk_ratio_df <- talk_ratio_df[month_setting,]
+```
+
+
+```{r echo=FALSE}
+talk_ratio_time_df <- talk_ratio_df %>%
+  mutate(day = ymd(str_sub(talk_ratio_df[,1],1,10))) %>%
+  mutate(wday = wday(str_sub(talk_ratio_df[,1],1,10), TRUE)) %>%
+  mutate(hour = ymd_h(str_sub(talk_ratio_df[,1],1,13))) %>%
+  mutate(minute = ymd_hm(str_sub(talk_ratio_df[,1],1,16))) %>%
+  mutate(count = rep(1,nrow(talk_ratio_df)))
+```
+
+<br>
+
+### **1. 일별 카톡 트래픽**
+하루에 몇개의 카톡이 오고 가는가를 보려고 한다. 경험상 1200명의 사람들이 매일 같이 질문답변을 함에도, 많이 하는날이 있고 적게 하는 날이 있었다.
+
+<br>
+
+```{r echo=FALSE}
+group_by_day_df <- talk_ratio_time_df %>%
+  group_by(day) %>%
+  summarise(count = sum(count)) %>%
+  # arrange(desc(count)) %>%
+  as.data.frame()
+
+# plot(group_by_day_df, lty="l")
+
+group_by_day_plot <- ggplot(group_by_day_df, aes(x=day, y=count, colours=day)) +
+  geom_point(stat = "identity") +
+  # geom_bar(stat = "identity") + 
+  geom_line(stat = "identity") + 
+  # scale_x_continuous(breaks=seq("2019-07-01","2019-07-31", "1")) + 
+  theme(axis.text.x = element_text(angle = 30))
+  # theme(axis.title.x=element_blank(),
+  #       axis.text.x=element_blank(),
+  #       axis.ticks.x=element_blank())
+
+ggplotly(group_by_day_plot, height = 500, width=700)
+
+```
+<br>
+
+### **2. 시간별 카톡 트래픽**
+시간별 얼마나 카톡이 오고가는지 알아보자. 이 수치를 알아보는 이유는 다음과 같다. <br>
+- 주로 몰리는 특정 시간대가 있는가?
+- 또는, 주로 몰리게 되는 주요 **키워드**가 존재하는가? <br>
+몰리는 시간대야 쉽게 이를 통해 알 수 있지만 이 카톡방에서의 경험상 특히 몰리는 키워드가 있었다.(Ex. R이랑 파이썬 어떤거 공부 해야 할까요?, 대학원 가야 할까요? 등등)
+
+
+<br>
+```{r echo=FALSE}
+group_by_hour_df <- talk_ratio_time_df %>%
+  group_by(hour) %>%
+  summarise(count = sum(count)) %>%
+  as.data.frame()
+
+group_by_hour_plot <- ggplot(group_by_hour_df, aes(x=hour, y=count, colours=hour)) +
+  geom_line(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 30))
+
+
+ggplotly(group_by_hour_plot, height = 550, width=700)
+```
+
+<br>
+
+### **3. 자주 쓰는 단어**
+시간대별 트래픽이중 상위 5개의 시간에 대한 키워드를 알아보자. 트래픽이 몰렸을때의 주요 키워드를 알아보도록 하자. 가령, 시간대가 점심이면 점심밥에 대한 이야기를, 금요일 밤이면, 월요일 아침이면, 그에 대한 키워드가 나올 것이다. 그리고 특정 키워드가 사람들을 참여하게 한다면 어떤 키워드 인지도 파악해보자.
+
+<br>
+
+```{r echo=FALSE}
+group_by_hour_df_arrange <- group_by_hour_df %>% 
+  arrange(desc(count))
+
+total_word.freq_time_df <- data.frame()
+for(i in 1:5) {
+talk_densetopn_msg <- talk_ratio_time_df[talk_ratio_time_df$hour %in% group_by_hour_df_arrange$hour[i],]$Message
+
+
+word_test_df <- talk_densetopn_msg
+
+# "" 제거
+word_test_df <- word_test_df[which(word_test_df != "")]
+
+# 특수문자 제거
+word_test_df <- str_replace_all(word_test_df, "\\W", " ")
+
+
+nouns <- KoNLP::extractNoun(word_test_df)
+
+# table 형태로 변환
+wordcount <- table(unlist(nouns))
+
+df.word  <- as.data.frame(wordcount, stringsAsFactors = FALSE)
+
+df.word <- rename(df.word, word = Var1, freq = Freq)
+
+
+word.freq  <- df.word %>% filter(nchar(word) >=2) %>% arrange(desc(freq)) 
+
+# %>% arrange(desc(freq))
+
+lol_list <- 
+grepl("ㅎ",word.freq[,1]) |
+  grepl("ㅋ",word.freq[,1]) | 
+  grepl("ㄷ",word.freq[,1]) |
+  grepl("이모",word.freq[,1]) 
+
+word.freq <- word.freq[!lol_list,]
+
+
+word.freq_time_df <- cbind(word.freq[1:20,],"time" = rep(group_by_hour_df_arrange[i,1],20))
+total_word.freq_time_df <- rbind(total_word.freq_time_df,word.freq_time_df)
+}
+```
+
+#### **`r group_by_hour_df_arrange[1,1]` ~  `r group_by_hour_df_arrange[1,1] + 60*59` ** 의 키워드<br>
+1시간동안 `r group_by_hour_df_arrange[1,2]`건의 카톡을 했다. 아래 그래프를 보자. 가장 많은 단어가 독학이다. 그리고, 아래에 점점 보이는 단어는 캐글, 경력 ,코딩 등등이 나오고 17번째로 메달이나오는걸로 봐서 "데이터 분석을 공부 하고 싶은데 독학으로도 괜찮을까요?" 라는 질문으로 이야기가 진행 된듯 싶다.
+
+```{r echo=FALSE}
+total_word.freq_time_df %>% 
+  filter(time == unique(total_word.freq_time_df$time)[1]) %>% 
+  datatable()
+```
+
+#### **`r group_by_hour_df_arrange[2,1]` ~  `r group_by_hour_df_arrange[2,1] + 60*59` ** 의 키워드<br>
+1시간동안 `r group_by_hour_df_arrange[2,2]`건의 카톡을 했다. 아래 그래프를 보자. 연봉이다. 매우 민감한 단어 연봉. 좀 더 보면, 생각, 회사, 삼성(연봉얘기엔 삼성에 비교를 하는가보다.), 실력, 경력, 대기업, 대학원, 신입, 사업 등등이 눈에 보인다. 연봉 이야기로 시작해서, 위의 키워드의 대화가 오갔을 것이다. "연봉 xxxx 적절한가요?","삼성은 xxxx 받는다는데요 와..","역시 대기업이구나","실력 있으면 받는거죠 뭐","신입에 xxxx정도면 적당한거죠","차라리 실력 좀 키워서 옮기세요", "돈벌라면 사업 해야죠.."
+
+```{r echo=FALSE}
+total_word.freq_time_df %>% 
+  filter(time == unique(total_word.freq_time_df$time)[2]) %>% 
+  datatable()
+```
+
+#### **`r group_by_hour_df_arrange[3,1]` ~  `r group_by_hour_df_arrange[3,1] + 60*59` ** 의 키워드<br>
+1시간동안 `r group_by_hour_df_arrange[3,2]`건의 카톡을 했다. 아래 그래프를 보자. 데이터라는 키워드가 제일 많이 보이고, 그 아래로는 특징이 추측되지 않는 단어들로 연결되어 있다. 위의 두 테이블은 그동안 오픈채팅방에서 내가 봐왔던 경험에 의존하여 단어들로 추측을 했었지만 이번에는 쉽게 추측이 되지 않는다.
+ 
+```{r echo=FALSE}
+total_word.freq_time_df %>% 
+  filter(time == unique(total_word.freq_time_df$time)[3]) %>% 
+  datatable()
+```
+
+#### **`r group_by_hour_df_arrange[4,1]` ~  `r group_by_hour_df_arrange[4,1] + 60*59` ** 의 키워드<br>
+1시간동안 `r group_by_hour_df_arrange[4,2]`건의 카톡을 했다. 아래 그래프를 보자. 최상위 키워드 '분석' 가지고는 쉽게 유추가 되지 않는다. 그러나, 특징을 잡을 수 있는 단어가 있는데, 이탈, 접속, 게임 ,유저, 경험, 레벨 이라는 단어가 있다. 이부분에 대해서 유추를 하기 위해서는 아주 강력한 **도메인 지식** (카톡방에서의 경험과, 사회 트렌드)가 필요하다. <br>
+ 7월 초에 빅콘테스트 경진 대회를 개최 했다. 매우 큰 규모의 경진 대회로, 이중 챔피언리그 항목에서 '엔씨소프트에서 제공하는 ‘리니지’ 고객 활동 데이터를 활용하여 향후 고객이탈 방지를 위한 프로모션 수행 시 예상되는 잔존가치를 산정하는 예측 모형 개발' 이라는 대회가 있다. 그래서 이 당시에 이 대회를 통해 화두를 던지고 '고객 이탈 방지 예측 모델'에 대해서, 이야기를 나누었던것 같다.
+
+```{r echo=FALSE}
+total_word.freq_time_df %>% 
+  filter(time == unique(total_word.freq_time_df$time)[4]) %>% 
+  datatable()
+```
+
+#### **`r group_by_hour_df_arrange[5,1]` ~  `r group_by_hour_df_arrange[5,1] + 60*59` ** 의 키워드<br>
+1시간동안 `r group_by_hour_df_arrange[5,2]`건의 카톡을 했다. 아래 그래프를 보자. 이 테이블을 보면, 20대 초반의 학생들의 질문으로 대화가 오가지 않았나 싶다. 초반부에는 크게 보이지 않지만 뒤에 군대라는 키워드, 그리고 입문, 전공, 취업 등등이 나오는걸로 봐서는 쉽게 유추를 해볼 수 있다.
+
+```{r echo=FALSE}
+total_word.freq_time_df %>% 
+  filter(time == unique(total_word.freq_time_df$time)[5]) %>% 
+  datatable()
+```
+
+<br>
+
+### **4. 파레토 법칙**
+파레토 법칙이 어떻게 적용 되는가?<br>
+- 파레토 법칙: 파레토 법칙( - 法則, 영어: Pareto principle, law of the vital few, principle of factor sparsity) 또는 80 대 20 법칙(영어: 80–20 rule)은 '전체 결과의 80%가 전체 원인의 20%에서 일어나는 현상'을 가리킨다.[3] 예를 들어, 20%의 고객이 백화점 전체 매출의 80%에 해당하는 만큼 쇼핑하는 현상을 설명할 때 이 용어를 사용한다. 2 대 8 법칙라고도 한다. (출처: 위키) <br>
+
+말 그대로 오픈채팅방에서 전체 카톡의 80%를 차지하는 대화가 주 멤버 20%의 비율에서 나오는지 알아보려고 한다. 한계점이 있다면, 카톡에서는 대화를 할때 문장을 작성하는 경우도 있지만 단어를 한줄씩 작성하면서 문장을 완성하는 경우도 있다. <br>
+아래 테이블로 대화의 비중에서 80% 에 해당하는 비율이 몇%를 차지하는지 알아보자. <br>
+보면 단 6명의 대화가 전체 대화의 20%를 차지 하는데, 이를 해석 해보자면
+- 카톡 대화 전처리의 한계
+- 잠수중인 인원 처리의 한계
+- 극심한 양극화 (커뮤니티의 특성상 이 현상은 종종 보이긴 하더라.)
+정도로 해석해 볼 수 있겠다.
+
+```{r echo=FALSE}
+## 참여율 높은 회원
+group_by_talk_df <- talk_ratio_time_df %>%
+  group_by(User) %>%
+  summarise(count = sum(count)) %>%
+  arrange(desc(count)) %>%
+  as.data.frame()
+```
+
+
+```{r echo=FALSE}
+datatable(group_by_talk_df)
+```
+
+<br>
+### **5. 7월의 가입/탈퇴**
+7월 한달 동안 몇명이 가입 했고, 몇명이 나갔고, 이 트렌드는 어떠 할까? <br>
+
+```{r echo=FALSE}
+join_out_tf <- FALSE
+
+for(pattern in text_pattern[1:2]) {
+  join_out_tf <- join_out_tf | (pattern == total_df$Message)
+  
+}
+
+out_df <- total_df[join_out_tf,]
+
+# 이중 7월달만 사용
+month_setting <- out_df$Date >= month_range &
+  out_df$Date < month_range_next
+
+out_df <- out_df[month_setting,]
+
+
+out_df_clean <- out_df %>%
+  mutate(day = ymd(str_sub(out_df[,1],1,10))) %>%
+  mutate(wday = wday(str_sub(out_df[,1],1,10), TRUE)) %>%
+  mutate(hour = ymd_h(str_sub(out_df[,1],1,13))) %>%
+  mutate(minute = ymd_hm(str_sub(out_df[,1],1,16))) %>%
+  mutate(count = rep(1,nrow(out_df)))
+
+# unique(out_df_clean_group$Message)
+
+join_out_sum <- out_df_clean %>% 
+  group_by(Message) %>% 
+  summarise(count = sum(count)) %>%
+  as.data.frame()
+
+out_df_clean_group <- out_df_clean %>%
+  group_by(day, wday, Message) %>%
+  summarise(count = sum(count)) %>%
+  as.data.frame()
+
+plot_p <- ggplot(out_df_clean_group, aes(x=day, y=count, group = Message, colour = Message)) +
+  geom_line(size=1) +
+  theme(legend.position = "top") 
+```
+
+총 `r join_out_sum[1,2]` 명이 나갔고, `r join_out_sum[2,2]`명이 들어 왔다. 이를 더 자세히 파악하기 위해서는 사실 7월 뿐 아니라 전체 데이터를 가지고 파악을 해본는게 좋다. 시험기간만 되면 갑자기 들어와서 질문을 하는 사람들이 꽤 증가 하고, 시험이 끝난과 동시에 카톡방에서 나가는 사람들이 종종 있기 때문이다. 또, 방학이니 공부를 해보려는 사람도 있을 수 있고, 다른 이유로 데이터 분석 오픈채팅방을 찾는 유저가 있을 수 있기 때문이다.
+
+```{r echo=FALSE}
+ggplotly(plot_p, height = 500, width=800)
+```
+<br>
+
+---
+
+<br>
+
+## **총평** <br><br>
+
+내가 주로 사용하는 오픈채팅방의 비정형 데이터를 정형화 시켜서, 그리고 나의 경험에 비추어서 분석을 해보았다. 특히 도메인 지식이 없이는 이 카톡 데이터를 어떻게 해석 해도 어떠한 결과를 얻기 힘들거라는 생각이 너무 든다. 또한, 분석의 방향도 잘 잡아야한다고 생각을 했는데, 아까 시간별 트렌드를 파악 하려고 할 때 좀 더 현명한 방법이 있었을까 하는 생각이 든다. 차후에 이 분석은 캐글관련 오픈 채팅방에도 적용을 시켜보려고 한다.
+
