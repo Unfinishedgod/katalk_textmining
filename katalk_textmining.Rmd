@@ -29,7 +29,7 @@ output:
 이름: 최의용 <br>
 Email : shjj08@gmail.com <br>
 블로그 주소: [오픈채팅방 분석 - 비정형 데이터의 정형화](https://medium.com/@unfinishedgod/%EC%98%A4%ED%94%88%EC%B1%84%ED%8C%85%EB%B0%A9-%EB%B6%84%EC%84%9D-1-%EB%B9%84%EC%A0%95%ED%98%95-%EB%8D%B0%EC%9D%B4%ED%84%B0%EC%9D%98-%EC%A0%95%ED%98%95%ED%99%94-c6dc537d4846) <br>
-깃허브 주소: [https://github.com/Unfinishedgod](https://github.com/Unfinishedgod)  <br>
+깃허브 주소: [https://github.com/Unfinishedgod/katalk_textmining](https://github.com/Unfinishedgod/katalk_textmining)  <br>
 페이스북 주소: [https://www.facebook.com/shjj08](https://www.facebook.com/shjj08) <br>
 
 ---
@@ -206,14 +206,6 @@ levels(total_df$User) <- paste0("User",c(1:length(levels(total_df$User))))
 
 ```{r echo=FALSE}
 # 카톡 공식 메시지 제거 하고 하기.
-
-text_pattern <- c("님이 들어왔습니다.",
-                  "님이 나갔습니다.",
-                  "채팅방 관리자가 메시지를 가렸습니다.",
-                  "님을 내보냈습니다.",
-                  "삭제된 메시지입니다.",
-                  "변경되었습니다.")
-
 pattern_test <- FALSE
 for(pattern in text_pattern) {
   pattern_test <- pattern_test | grepl(pattern, total_df$Message)
@@ -277,8 +269,8 @@ ggplotly(group_by_day_plot, height = 500, width=700)
 
 ### **2. 시간별 카톡 트래픽**
 시간별 얼마나 카톡이 오고가는지 알아보자. 이 수치를 알아보는 이유는 다음과 같다. <br>
-- 주로 몰리는 특정 시간대가 있는가?
-- 또는, 주로 몰리게 되는 주요 **키워드**가 존재하는가? <br>
+ - 주로 몰리는 특정 시간대가 있는가? <br>
+ - 또는, 주로 몰리게 되는 주요 **키워드**가 존재하는가? <br>
 몰리는 시간대야 쉽게 이를 통해 알 수 있지만 이 카톡방에서의 경험상 특히 몰리는 키워드가 있었다.(Ex. R이랑 파이썬 어떤거 공부 해야 할까요?, 대학원 가야 할까요? 등등)
 
 
@@ -417,6 +409,11 @@ group_by_talk_df <- talk_ratio_time_df %>%
   summarise(count = sum(count)) %>%
   arrange(desc(count)) %>%
   as.data.frame()
+
+# 전체 대화에서의 비율 조사
+group_by_talk_df <- group_by_talk_df %>% 
+  mutate(ratio = round(prop.table(group_by_talk_df[,2])  * 100,5)) %>% # 비율  prop.table 함수
+  mutate(cum_ratio = cumsum(ratio)) # 누적 비율 cumsum 함수
 ```
 
 
@@ -425,6 +422,7 @@ datatable(group_by_talk_df)
 ```
 
 <br>
+
 ### **5. 7월의 가입/탈퇴**
 7월 한달 동안 몇명이 가입 했고, 몇명이 나갔고, 이 트렌드는 어떠 할까? <br>
 
