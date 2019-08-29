@@ -135,7 +135,8 @@ text_pattern <- c("님이 들어왔습니다.",
                   "채팅방 관리자가 메시지를 가렸습니다.",
                   "님을 내보냈습니다.",
                   "삭제된 메시지입니다.",
-                  "변경되었습니다.")
+                  "변경되었습니다.",
+                  "초대했습니다.")
 
 # 각 패턴별 df 생성
 pattern_df <- c()
@@ -201,6 +202,8 @@ total_df$User[head_null_index] <- gsub(" ","",total_df$User[head_null_index])
 # User로 변경
 total_df$User <- factor(total_df$User)
 levels(total_df$User) <- paste0("User",c(1:length(levels(total_df$User))))
+
+head(total_df,10)
 ```
 
 
