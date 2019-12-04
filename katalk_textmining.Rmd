@@ -1,5 +1,5 @@
 ---
-title: "오픈채팅방 데이터 탐색"
+title: "오픈채팅방 데이터 분석"
 auther: "최의용"
 
 output:
